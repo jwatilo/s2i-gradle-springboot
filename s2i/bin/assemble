@@ -1,0 +1,45 @@
+#!/bin/bash -e
+#
+# S2I assemble script for the 'gradle-springboot-rhel7' image.
+# The 'assemble' script builds your application source so that it is ready to run.
+#
+# For more information refer to the documentation:
+#	https://github.com/openshift/source-to-image/blob/master/docs/builder_image.md
+#
+
+# If the 'gradle-springboot-rhel7' assemble script is executed with the '-h' flag, print the usage.
+if [[ "$1" == "-h" ]]; then
+	exec /usr/libexec/s2i/usage
+fi
+
+# Restore artifacts from the previous build (if they exist).
+#
+if [ "$(ls /tmp/artifacts/ 2>/dev/null)" ]; then
+  echo "---> Restoring build artifacts..."
+  mv /tmp/artifacts/. ./
+fi
+
+# The current directory is /opt/app-root/src (according to S2I documentation)
+echo "---> Installing application source..."
+cp -Rf /tmp/src/. ./
+
+if [ ! -e ./build.gradle ] ; then
+  echo "FATAL - No build.gradle found"
+  exit 1
+fi
+
+echo "---> Building application from source..."
+export GRADLE_OPTS="-Dorg.gradle.daemon=false"
+gradle build
+
+echo "---> Copying built application to app-root..."
+JAR_FILE=$(ls /opt/app-root/src/build/libs/*.jar 2>/dev/null)
+if [ -z "${JAR_FILE}" ] ; then
+  echo "FATAL - No jar file round"
+  exit 1
+elif [ $(echo ${JAR_FILE} | wc -w) -gt 1 ] ; then
+  echo "FATAL - Multiple jar files found"
+  exit 1
+fi
+cp -a ${JAR_FILE} /opt/app-root/app.jar
+
